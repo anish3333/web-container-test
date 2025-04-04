@@ -10,7 +10,7 @@ export default function Preview({ url }: PreviewProps) {
         <iframe 
           src={url} 
           title="preview" 
-          className="w-full h-full border-0"
+          className="w-fit h-fit border-0"
           sandbox="allow-scripts allow-same-origin"
         />
       ) : (

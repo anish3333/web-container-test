@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState } from "react";
 import { WebContainer } from "@webcontainer/api";
 import { Terminal } from "@xterm/xterm";
@@ -14,7 +13,8 @@ export default function App() {
   const [fileSystem, setFileSystem] = useState(files);
   const [iframeUrl, setIframeUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  
+  const [terminalReady, setTerminalReady] = useState(false);
+
   const webContainerInstance = useRef<WebContainer | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const shellProcessRef = useRef<any>(null);
@@ -23,10 +23,10 @@ export default function App() {
   useEffect(() => {
     const initializeWebContainer = async () => {
       if (!terminalRef.current) return;
-      
+
       try {
         setIsLoading(true);
-        
+
         // Boot WebContainer
         webContainerInstance.current = await WebContainer.boot();
         console.log("WebContainer booted successfully");
@@ -50,7 +50,8 @@ export default function App() {
       }
     };
 
-    if (terminalRef.current) {
+    // Fix 2: Only run when terminalReady is true, not on terminalRef.current change
+    if (terminalReady && terminalRef.current) {
       initializeWebContainer();
     }
 
@@ -63,7 +64,7 @@ export default function App() {
           console.error("Error releasing writer lock:", e);
         }
       }
-      
+
       if (shellProcessRef.current) {
         try {
           shellProcessRef.current.kill();
@@ -71,7 +72,7 @@ export default function App() {
           console.error("Error killing shell process:", error);
         }
       }
-      
+
       if (webContainerInstance.current) {
         try {
           webContainerInstance.current.teardown();
@@ -80,7 +81,7 @@ export default function App() {
         }
       }
     };
-  }, [terminalRef.current]);
+  }, [terminalReady]); 
 
   const startShell = async () => {
     if (!webContainerInstance.current || !terminalRef.current) {
@@ -90,14 +91,14 @@ export default function App() {
 
     try {
       // Spawn the shell process
-      const shellProcess = await webContainerInstance.current.spawn('jsh', {
+      const shellProcess = await webContainerInstance.current.spawn("jsh", {
         terminal: {
           cols: terminalRef.current.cols,
           rows: terminalRef.current.rows,
-        }
+        },
       });
       shellProcessRef.current = shellProcess;
-      
+
       // Pipe shell output directly to terminal
       shellProcess.output.pipeTo(
         new WritableStream({
@@ -108,17 +109,17 @@ export default function App() {
           },
         })
       );
-      
+
       // CRITICAL: Store the writer in the ref so we can reuse it
       writerRef.current = shellProcess.input.getWriter();
-      
+
       // Write initial commands with delay
       setTimeout(() => {
         if (writerRef.current) {
           writerRef.current.write("npm install && npm run start\n");
         }
       }, 1000);
-      
+
       console.log("Shell process started and connected to terminal");
       return shellProcess;
     } catch (error) {
@@ -132,7 +133,7 @@ export default function App() {
       console.warn("Shell writer not initialized");
       return;
     }
-    
+
     try {
       // Use the stored writer reference
       writerRef.current.write(data);
@@ -140,7 +141,7 @@ export default function App() {
       console.error("Error writing to shell:", error);
     }
   };
-  
+
   const handleFileChange = async (path: string, content: string) => {
     if (!webContainerInstance.current) return;
 
@@ -159,14 +160,29 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-slate-800 text-slate-100">
-      <header className="bg-slate-900 p-4">
-        <h1 className="text-xl font-bold">WebContainer IDE</h1>
-        {isLoading && <span className="text-yellow-400 ml-4">Initializing...</span>}
+    <div className="flex flex-col h-screen w-screen bg-gray-900 text-gray-50 font-sans">
+      <header className="bg-gray-950 border-b border-gray-800 shadow-md p-3 flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <div className="w-4 h-4 rounded-full bg-indigo-500"></div>
+          <h1 className="text-lg font-bold tracking-tight bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+            WebContainer
+          </h1>
+        </div>
+        {isLoading ? (
+          <div className="flex items-center gap-2 bg-gray-800 py-1 px-3 rounded-full text-sm">
+            <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+            <span className="text-yellow-400">Initializing environment...</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 bg-gray-800 py-1 px-3 rounded-full text-sm">
+            <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+            <span className="text-green-400">Ready</span>
+          </div>
+        )}
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="w-64 bg-slate-700 border-r border-slate-600 overflow-y-auto">
+        <div className="w-64 bg-gray-850 border-r border-gray-800 overflow-y-auto flex-shrink-0 shadow-lg z-10">
           <FileViewer
             files={Object.keys(fileSystem)}
             currentFile={currentFile}
@@ -174,28 +190,52 @@ export default function App() {
           />
         </div>
 
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 flex overflow-hidden">
-            <div className="flex-1 border-r border-slate-600">
-              <FileEditor
-                content={
-                  fileSystem[currentFile]?.file?.contents || "// Loading..."
-                }
-                onChange={(content) => handleFileChange(currentFile, content)}
-              />
+            <div className="flex-1 border-r border-gray-800 relative overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 bg-gray-850 px-4 py-4 border-b border-gray-800 flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-300">
+                  {currentFile}
+                </span>
+              </div>
+              <div className="pt-10 h-full">
+                <FileEditor
+                  content={
+                    fileSystem[currentFile]?.file?.contents || "// Loading..."
+                  }
+                  onChange={(content) => handleFileChange(currentFile, content)}
+                />
+              </div>
             </div>
-            <div className="flex-1">
-              <Preview url={iframeUrl} />
+
+            <div className="flex-1 relative">
+              <div className="absolute top-0 left-0 right-0 bg-gray-850 px-4 py-4 z-50 border-b border-gray-800 flex items-center justify-between">
+                <span className="text-md font-medium text-gray-300">
+                  Preview
+                </span>
+              </div>
+              <div className="pt-[56px] h-full">
+                <Preview url={iframeUrl} />
+              </div>
             </div>
           </div>
 
-          <div className="h-64 bg-slate-900 border-t border-slate-600">
-            <TerminalComponent 
-              onData={handleTerminalData} 
-              getTerminalInstance={(terminal) => {
-                terminalRef.current = terminal;
-              }}
-            />
+          <div className="h-72 border-t border-gray-800">
+            <div className="bg-gray-850 px-4 py-4 border-b border-gray-800 flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-300">
+                Terminal
+              </span>
+            </div>
+            <div className="h-60">
+              <TerminalComponent
+                onData={handleTerminalData}
+                getTerminalInstance={(terminal) => {
+                  // Fix 4: Set the terminal reference and then update state
+                  terminalRef.current = terminal;
+                  setTerminalReady(true);
+                }}
+              />
+            </div>
           </div>
         </div>
       </div>

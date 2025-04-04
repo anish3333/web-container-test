@@ -19,14 +19,15 @@ export default function TerminalComponent({
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Initialize terminal
+    // Initialize terminal with custom styling
     const terminal = new Terminal({
       cursorBlink: true,
       convertEol: true,
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+      fontFamily: '"Menlo", Monaco, "Courier New", monospace',
+      fontSize: 13,
       theme: {
-        background: '#1e293b',
-        foreground: '#f8fafc',
+        background: '#111827',
+        foreground: '#e2e8f0',
       },
     });
 
@@ -37,32 +38,39 @@ export default function TerminalComponent({
     fitAddonRef.current = fitAddon;
     terminal.loadAddon(fitAddon);
     
-    // Open terminal in container and fit it
+    // Open terminal in container
     terminal.open(containerRef.current);
+    
+    // Set up data handler
+    terminal.onData(onData);
+
+    // IMPORTANT: Share terminal instance with parent component
+    // This needs to happen before attempting to fit the terminal
+    if (getTerminalInstance) {
+      getTerminalInstance(terminal);
+    }
+    
+    // Now fit the terminal after sharing the instance
     try {
       fitAddon.fit();
     } catch (e) {
       console.error("Error fitting terminal:", e);
     }
 
-    // Set up data handler
-    terminal.onData(onData);
-
-    // Share terminal instance with parent component
-    if (getTerminalInstance) {
-      getTerminalInstance(terminal);
-    }
-
     // Handle resize
     const resizeObserver = new ResizeObserver(() => {
       try {
-        fitAddon.fit();
+        if (fitAddonRef.current) {
+          fitAddonRef.current.fit();
+        }
       } catch (e) {
         console.error("Error fitting terminal on resize:", e);
       }
     });
     
-    resizeObserver.observe(containerRef.current);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
 
     return () => {
       resizeObserver.disconnect();
@@ -70,5 +78,7 @@ export default function TerminalComponent({
     };
   }, []);
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  return (
+    <div ref={containerRef} className="h-full w-full" />
+  );
 }

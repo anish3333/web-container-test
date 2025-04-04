@@ -1,4 +1,3 @@
-// components/FileEditor.tsx
 import { useState, useEffect } from 'react';
 
 type FileEditorProps = {
@@ -23,8 +22,11 @@ export default function FileEditor({ content, onChange }: FileEditorProps) {
     <textarea
       value={value}
       onChange={handleChange}
-      className="w-full h-full p-4 bg-slate-800 text-slate-100 font-mono text-sm outline-none resize-none"
+      className="w-full h-full p-6 bg-gray-900 text-gray-50 font-mono text-sm outline-none resize-none border-0 focus:ring-0 focus:outline-none leading-relaxed selection:bg-indigo-700/30"
       spellCheck="false"
+      style={{
+        tabSize: 2,
+      }}
     />
   );
 }

@@ -1,4 +1,10 @@
-export const files = {
+interface File {
+  file: {
+    contents: string;
+  };
+}
+
+export const files: Record<string, File> = {
   "index.js": {
     file: {
       contents: `
